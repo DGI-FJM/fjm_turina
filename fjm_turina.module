@@ -1,1 +1,62 @@
 <?php 
+
+/**
+ * @file
+ * fjm_turina customizations
+ */
+ 
+ /**
+  * Implementation of hook_menu
+  */
+function fjm_turina_menu() {
+  
+  $items = array();
+  $items['home'] = array(
+    'title' => t('Home'),
+    'page callback' => 'fjm_turina_landing_page',
+    'access arguments' => array('access content'),
+    'file' => 'fjm_turina_landing.page.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_theme
+ */
+function fjm_turina_theme($existing, $type, $theme, $path) {
+
+  return array(
+    'fjm_turina_landing' => array(
+      'path' => drupal_get_path('module', 'fjm_turina') . '/templates',
+      'arguments' => array(
+        'bio' => NULL,
+        'content' => NULL,
+        'collections' => NULL,
+        'browse' => NULL,
+        'search' => NULL,
+      ),
+      'template' => 'fjm_turina_landing_page',
+    ),
+    'fjm_turina_landing_collections' => array(
+      'arguments' => array(
+        'music' => NULL,
+        'personal_collections' => NULL,
+      ),
+    ),
+  );
+
+}
+
+/**
+ * Collection links theme function
+ */
+
+function theme_fjm_turina_landing_collections($music, $personal_collections) {
+  $output = '<h3 class="front-title">' . t('Music') . '</h3>';
+  $output .= theme('links', $music, array('class' => 'fjm-turina-links-music'));
+  $output .= '<h3 class="front-title">' . t('Personal Archive') . '</h3>';
+  $output .= theme('links', $personal_archives, array('class' => 'fjm-turina-links-personal-archives'));
+
+  return $output;  
+}
