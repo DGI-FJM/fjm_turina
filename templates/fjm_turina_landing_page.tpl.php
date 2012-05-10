@@ -18,7 +18,7 @@
   <div class="front-wrapper-bottom">
     <div class="front-content">
       <h2 class="front-title"><?php print t('Content'); ?></h2>
-      <?php print $collection; ?>
+      <?php print $content; ?>
     </div>
     <div class="front-collections">
       <h2 class="front-title"><?php print t('Collections'); ?></h2>

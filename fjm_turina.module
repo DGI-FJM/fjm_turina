@@ -41,7 +41,7 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
     'fjm_turina_landing_collections' => array(
       'arguments' => array(
         'music' => NULL,
-        'personal_archives' => NULL,
+        'personal_archive' => NULL,
       ),
     ),
   );
@@ -52,11 +52,11 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
  * Collection links theme function
  */
 
-function theme_fjm_turina_landing_collections($music, $personal_archives) {
+function theme_fjm_turina_landing_collections($music, $personal_archive) {
   $output = '<h3 class="front-title">' . t('Music') . '</h3>';
   $output .= theme('links', $music, array('class' => 'fjm-turina-links-music'));
-  $output .= '<h3 class="front-title">' . t('Personal Archives') . '</h3>';
-  $output .= theme('links', $personal_archives, array('class' => 'fjm-turina-links-personal-archives'));
+  $output .= '<h3 class="front-title">' . t('Personal Archive') . '</h3>';
+  $output .= theme('links', $personal_archive, array('class' => 'fjm-turina-links-personal-archive'));
 
   return $output;  
 }
