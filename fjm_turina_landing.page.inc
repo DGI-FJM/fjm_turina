@@ -6,8 +6,8 @@ function fjm_turina_landing_page() {
   $collections = _fjm_turina_landing_page_collections();
   $browse = _fjm_turina_landing_page_browse();
   $search = '';
-  
-  return theme('fjm_turina_landing', $bio, $content, $collections, $browse, $search);
+  return 'test';
+  //return theme('fjm_turina_landing', $bio, $content, $collections, $browse, $search);
 }
 
 function _fjm_turina_landing_page_bio() {
