@@ -26,14 +26,26 @@ function _fjm_turina_get_xml_files() {
 }
 
 function fjm_turina_ingest() {
+  module_load_include('inc', 'fjm_turina', 'mets_ingest');
+  module_load_include('inc', 'fjm_turina', 'mods_ingest');
+  
   $objects = array();
+  
   foreach (_fjm_turina_get_xml_files() as $filename => $file) {
     $xml_xpath = new DOMXPath(DOMDocument::load("./$filename"));
     $xml_xpath->registerNamespace('mets', 'http://www.loc.gov/METS/');
     $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
     
-    module_load_include('inc', 'fjm_turina', 'mets_ingest');
-    $objects += _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, array('isMemberOfCollection', 'jt:test'), NULL);
+    $collection_relation = array('isMemberOfCollection', 'jt:test');
+    
+    $new_objects = array();
+    $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, $collection_relation, NULL));
+    
+    if (count($new_objects) === 0) {
+      $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mods_file($filename, $xml_xpath, $collection_relation, NULL));
+    }
+    
+    $objects = array_merge($objects, $new_objects);
   }
   
   drush_print_r($objects);
