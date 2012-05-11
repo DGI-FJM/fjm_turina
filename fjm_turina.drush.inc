@@ -21,7 +21,7 @@ function fjm_turina_drush_command() {
  */
 function _fjm_turina_get_xml_files() {
   $files = file_directory_path() . '/data';
-  $xml_files = file_scan_directory($files, '\.xml');
+  $xml_files = file_scan_directory($files, '\.[xX][mM][lL]');
   return $xml_files;
 }
 

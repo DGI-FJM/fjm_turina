@@ -28,12 +28,16 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   $title_info = $mods_xpath->query('mods:titleInfo', $item)->item(0);
   
   $object['label'] = $mods_xpath->evaluate('string(mods:title/text())', $title_info);
+  
+  $bare_mods = new DOMDocument('1.0', 'utf-8');
+  $mods_element = $bare_mods->importNode($item, TRUE);
+  $bare_mods->appendChild($mods_element);
 
   //Add datastreams to the given object, based on inline XML.
   $object['datastreams']['MODS'] = array(
     'label' => 'MODS metadata record',
     'mimetype' => 'text/xml',
-    'content' => $mods_xpath->document->saveXML($item),
+    'content' => $bare_mods->saveXML(),
   );
 
   //Add datastream to the given object, base on files.
@@ -52,12 +56,15 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
 }
 
 function _fjm_turina_get_child_from_file($file) {
-  $page_number = 0;
   $filename = $file->filename;
-  $file_ext = substr($filename, strrpos($filename, '.') + 1);
+  $period_pos = strrpos($filename, '.');
+  $file_ext = substr($filename, $period_pos + 1);
+  $file_base = substr($filename, 0, $period_pos);
+  $page_number = substr($file_base, strrpos($file_base, '_') + 1);
   $dsid = strtoupper($file_ext);
   
   $object = array(
+    'label' => "Página-$page_number",
     'relations' => array(
       array('hasModel', 'islandora:pageCModel', 'info:fedora/fedora-system:def/model#'),
       array('isMemberOf', '%parent%'),
