@@ -5,7 +5,7 @@ function fjm_turina_landing_page() {
   $content = _fjm_turina_landing_page_content();
   $collections = _fjm_turina_landing_page_collections();
   $browse = _fjm_turina_landing_page_browse();
-  $search = '';
+  $search = _fjm_turina_landing_page_search();
 
   return theme('fjm_turina_landing', $bio, $content, $collections, $browse, $search);
 }
@@ -34,5 +34,6 @@ function _fjm_turina_landing_page_browse() {
 }
 
 function _fjm_turina_landing_page_search() {
-
+  $block = module_invoke('quicktabs', 'block', 'view', 1);
+  return $block['content'];
 }
