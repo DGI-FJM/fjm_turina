@@ -203,12 +203,12 @@ function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
     call_user_func_array(array($item, 'add_relationship'), $relationship);
   }
   
-  foreach ($object['datastreams'] as $dsid => $dsinfo) {
+  foreach ($object['datastreams'] as $dsid => &$dsinfo) {
     $label = $dsinfo['label'];
     $mimetype = $dsinfo['mimetype'];
     $control_group = $dsinfo['control_group'];
     if (!$control_group) {
-      $control_group = _fjm_turina_get_control_group_from_mime($mimetype);
+      $control_group = $dsinfo['control_group'] = _fjm_turina_get_control_group_from_mime($mimetype);
     }
     
     if ($dsinfo['fileurl']) {
