@@ -1,5 +1,7 @@
 <?php
 
+module_load_include('inc', 'fedora_repository', 'api/fedora_item'); //For the PAGE_URI constant
+
 /**
  *
  * @param $filename string
@@ -7,12 +9,10 @@
  *   Set of parameters to pass to Fedora_Item's add_relationship method;
  *   %parent% may be used for object placeholder in children.
  */
-function _fjm_turina_get_objects_from_mets_file($filename, $mets_xpath, $parent_relationship, $cm_relationship) {
-
-
+function _fjm_turina_get_objects_from_mets_file($filename, $mets_xpath, $relationships) {
   $objects = array();
   foreach ($mets_xpath->query('//mets:structMap[@TYPE="physical"]/mets:div[@TYPE="item"]') as $item) {
-    $objects[] = _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $item, array($parent_relationship));
+    $objects[] = _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $item, $relationships);
   }
   return $objects;
 }
@@ -62,7 +62,11 @@ function _fjm_turina_get_datastream_from_dmdsec($mets_xpath, $dmdid) {
 
     //Get the xmlData element's content
     if (($results = $mets_xpath->query('mets:xmlData/*', $top_wrapper)) && $results->length > 0) {
-      $datastream['content'] = $mets_xpath->document->saveXML($results->item(0));
+      $bare_metadata_xml = new DOMDocument('1.0', 'utf-8');
+      $metadata_element = $bare_metadata_xml->importNode($results->item(0));
+      $bare_metadata_xml->appendChild($metadata_element);
+   
+      $datastream['content'] = $bare_metadata_xml->saveXML();
       $datastreams[$dsid] = $datastream;
     }
     else {
@@ -83,14 +87,14 @@ function _fjm_turina_get_datastream_from_file($mets_xpath, $mets_file, $fileid) 
     $mets_path = $file->getAttributeNS('http://www.w3.org/1999/xlink', 'href');
     $file_components = array_filter(explode("\\", $mets_path));
     $path_components = array_filter(array_merge($path_components, $file_components));
-    drush_print_r($path_components);
+    //drush_print_r($path_components);
     $file_path = implode(DIRECTORY_SEPARATOR, $path_components);
     $file_ext = substr($file_path, strrpos($file_path, '.') + 1);
     $dsid = strtoupper($file_ext); //Just use the extension as the datastream id.
 
     $datastream['label'] = "Archival $dsid";
     $datastream['mimetype'] = mime_content_type($file_path);
-    $datastream['fileurl'] = file_create_url($file_path);
+    $datastream['fileurl'] = file_create_url(drupal_urlencode($file_path));
 
     $datastreams[$dsid] = $datastream;
   }

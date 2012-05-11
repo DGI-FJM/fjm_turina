@@ -1,5 +1,7 @@
 <?php 
 
+define(TURINA_NAMESPACE, 'jt-test-asdf');
+
 function fjm_turina_drush_command() {
   $command = array();
   
@@ -12,7 +14,53 @@ function fjm_turina_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
   );
   
+  $command['fjm_turina_purge'] = array(
+    'callback' => 'fjm_turina_purge',
+    'description' => 'Purge the defined namespace.',
+    'example' => array(
+      'drush [-l <drupal site URL>] fjm_turina_purge',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+  );
+  
+  $command['fjm_turina_reingest'] = array(
+    'callback' => 'fjm_turina_reingest',
+    'description' => 'Convenience; purges and then ingests',
+    'example' => array(
+      'drush [-l <drupal site URL>] fjm_turina_reingest',
+    ),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+  );
+  
   return $command;
+}
+
+function fjm_turina_reingest() {
+  fjm_turina_purge();
+  fjm_turina_ingest();
+}
+
+function fjm_turina_purge($namespace = TURINA_NAMESPACE) {
+  $namespace_query = <<<END_QUERY
+SELECT ?sub
+FROM <#ri>
+WHERE {
+  ?sub <info:fedora/fedora-system:def/model#hasModel> ?obj .
+  FILTER(regex(str(?sub), '^info:fedora/$namespace:')) 
+}
+END_QUERY;
+  
+  module_load_include('inc', 'fedora_repository', 'ObjectHelper');
+  $results = ObjectHelper::performSparqlQuery($namespace_query);
+  
+  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+  foreach ($results as $result) {
+    $item = new Fedora_Item($result['sub']);
+    $item->modify_object($item->objectProfile->objLabel, 'D');
+    $item->purge('Nuked via Drush script');
+    $item->forget();
+    drush_log("Purged {$item->pid}.");
+  }
 }
 
 /**
@@ -25,6 +73,9 @@ function _fjm_turina_get_xml_files() {
   return $xml_files;
 }
 
+/**
+ * Command callback; kick off the ingest process.
+ */
 function fjm_turina_ingest() {
   module_load_include('inc', 'fjm_turina', 'mets_ingest');
   module_load_include('inc', 'fjm_turina', 'mods_ingest');
@@ -36,17 +87,148 @@ function fjm_turina_ingest() {
     $xml_xpath->registerNamespace('mets', 'http://www.loc.gov/METS/');
     $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
     
-    $collection_relation = array('isMemberOfCollection', 'jt:test');
+    $relations = array(
+      array('isMemberOfCollection', 'jt:test'),
+      array('hasModel', 'islandora:bookCModel'),
+    );
     
     $new_objects = array();
-    $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, $collection_relation, NULL));
+    $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, $relations));
     
     if (count($new_objects) === 0) {
-      $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mods_file($filename, $xml_xpath, $collection_relation, NULL));
+      $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mods_file($filename, $xml_xpath, $relations));
     }
     
     $objects = array_merge($objects, $new_objects);
   }
   
-  drush_print_r($objects);
+  drupal_alter('fjm_turina_pre_ingest', $objects);
+  
+  foreach ($objects as &$object) {
+    _fjm_turina_ingest_object($object);
+  }
+  
+  drupal_alter('fjm_turina_post_ingest', $objects);
+}
+
+/**
+ * Determines a control group, given a mimetype.
+ * 
+ * @param $mime string
+ *   A datastream's mimetype.
+ * @return string
+ *   - 'X' if $mime is one of:
+ *     - 'text/xml'
+ *     - 'application/xml'
+ *     - 'application/rdf+xml'
+ *   - 'M' otherwise.
+ *   
+ */
+
+function _fjm_turina_get_control_group_from_mime($mime) {
+  $inline_xml_streams = array(
+    'text/xml',
+    'application/xml',
+    'application/rdf+xml',
+  );
+  
+  if (in_array($mime, $inline_xml_streams)) {
+    return 'X';
+  }
+  else {
+    return 'M';
+  }
+}
+
+/**
+ * Ingest the given object,
+ * 
+ * @param $object &array
+ *   An associative array describing the object, comprised of:
+ *   - 'label': A string containing a label for the object.
+ *   - 'relationships': An array of arrays, containing sets of parameters to
+ *     pass to Fedora_Item->add_datastream.
+ *   - 'datastreams': An associative array of arrays; keys are datastream IDs,
+ *     and the values are associative arrays describing a datastream, 
+ *     containing:
+ *     - 'label': A string containing a label for this datastream.
+ *     - 'mimetype': A string containing the mimetype of the content.
+ *     One of:
+ *     - 'fileurl': A string containing an absolute URL to a resource.
+ *     - 'filepath': A string containing a relative path to a resource
+ *       (relative to Drupal's root directory).
+ *     - 'content': A string containing the resource content.
+ *     And optionally:
+ *     - 'control_group': A single character indicating the control group for
+ *       the datastream (one of X, M, R, E); defaults to 'X' or 'M' as
+ *       appropriate (based on mimetype)
+ *   - 'children': An array of child object, described in a similar manner to
+ *     the current being ingested--used against this function recursively.
+ * @param $parent_pid string
+ *   A string containing the PID of the 'parent' object, used to fill in the
+ *   '%parent%' placeholder in relationships.
+ */
+function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
+  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+  static $allocated_pids = array();
+  
+  if (!$allocated_pids) {
+    $pid_pool_size = 4;
+    $allocated_pids = Fedora_Item::get_next_PID_in_namespace(TURINA_NAMESPACE, $pid_pool_size);
+    $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
+  }
+  
+  $pid = $object['pid'];
+  $item = NULL;
+  if ($pid) {
+    $item = new Fedora_Item($pid);
+  }
+  else {
+    $pid = $object['pid'] = array_shift($allocated_pids);
+    $item = Fedora_Item::ingest_new_item($pid, 'A', $object['label']);
+  }
+  
+  foreach ($object['relationships'] as &$relationship) {
+    if ($relationship[1] == '%parent%') {
+      if ($parent_pid !== NULL) {
+        $relationship[1] = $parent_pid;
+      }
+      else {
+        drush_print_r('%parent% placeholder used, but no parent PID!');
+        drush_print_r($object);
+        exit(2);
+      }
+    }
+    
+    call_user_func_array(array($item, 'add_relationship'), $relationship);
+  }
+  
+  foreach ($object['datastreams'] as $dsid => $dsinfo) {
+    $label = $dsinfo['label'];
+    $mimetype = $dsinfo['mimetype'];
+    $control_group = $dsinfo['control_group'];
+    if (!$control_group) {
+      $control_group = _fjm_turina_get_control_group_from_mime($mimetype);
+    }
+    
+    if ($dsinfo['fileurl']) {
+      $item->add_datastream_from_url($dsinfo['fileurl'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
+    }
+    elseif ($dsinfo['filepath']) {
+      $item->add_datastream_from_file($dsinfo['filepath'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
+    }
+    elseif ($dsinfo['content']) {
+      $item->add_datastream_from_string($dsinfo['content'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
+    }
+    else {
+      drush_log("No content specified for datastream $dsid!", 'warning');
+      //drush_print_r($object);
+    }
+  }
+  
+  drush_log("Ingested $pid.");
+  
+  foreach ($object['children'] as &$child) {
+    _fjm_turina_ingest_object($child, $pid);
+  }
 }
