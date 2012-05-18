@@ -44,7 +44,13 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   $path = dirname($filename);
   $basename = basename($filename);
   $file_base = substr($basename, 0, strrpos($basename, '.'));
-  $pattern = '^' . $file_base . '.*\.(jpg|tiff)$';
+  
+  if ((($file_path = "$path/$file_base/$file_base.pdf") && is_readable($file_path)) ||
+    (($file_path = "$path/$file_base/$file_base.PDF") && is_readable($file_path))) {
+    $object['datastreams'] += _fjm_turina_datastream_from_file($file_path);
+  }
+  
+  $pattern = '^' . $file_base . '.*\.([jJ][pP][eE]?[gG]|[tT][iI][fF]{1,2})$';
   $files = file_scan_directory($path, $pattern);
   foreach ($files as $file) {
     $object['children'][] = _fjm_turina_get_child_from_file($file);
@@ -53,13 +59,35 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   return $object;
 }
 
-function _fjm_turina_get_child_from_file($file) {
-  $filename = $file->filename;
+function _fjm_turina_datastream_from_file($filename) {
   $period_pos = strrpos($filename, '.');
   $file_ext = substr($filename, $period_pos + 1);
+  $dsid = $base_dsid = strtoupper($file_ext);
+  $mimetype = mime_content_type($filename);
+  
+  if ($mimetype == 'image/jpeg') {
+    $dsid = 'FULL_JPG';
+  }
+  elseif ($mimetype == 'image/tiff') {
+    $dsid = 'TIFF';
+  }
+  
+  return array(
+    $dsid => array(
+      'label' => "$base_dsid datastream",
+      'mimetype' => $mimetype,
+      'filepath' => $filename,
+    ),
+  );
+}
+
+function _fjm_turina_get_child_from_file($file) {
+  $filename = $file->filename;
+
+  $period_pos = strrpos($filename, '.');
   $file_base = substr($filename, 0, $period_pos);
   $page_number = substr($file_base, strrpos($file_base, '_') + 1);
-  $dsid = strtoupper($file_ext);
+
   
   $object = array(
     'label' => "Página-$page_number",
@@ -69,13 +97,7 @@ function _fjm_turina_get_child_from_file($file) {
       array('isPageOf', '%parent%', ISLANDORA_PAGE_URI),
       array('isPageNumber', $page_number, ISLANDORA_PAGE_URI),
     ),
-    'datastreams' => array(
-      $dsid => array(
-        'label' => "Archival $dsid",
-        'mimetype' => mime_content_type($filename),
-        'fileurl' => file_create_url(drupal_urlencode($filename)),
-      ),
-    ),
+    'datastreams' => _fjm_turina_datastream_from_file($filename),
     'children' => array(),
   );
 
