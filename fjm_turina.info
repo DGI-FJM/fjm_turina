@@ -2,6 +2,7 @@ name = Extensions for Turina
 description = Solr result formatting by type and ISLANDORACM callbacks
 dependencies[] = islandora_solr_search
 dependencies[] = islandora_fjm
+dependencies[] = imageapi_imagemagick
 package = Fedora Repository
 version = 6.1dev
 core = 6.x
