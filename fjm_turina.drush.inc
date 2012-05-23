@@ -1,6 +1,6 @@
 <?php 
 
-define(TURINA_NAMESPACE, 'jt-test-asdf');
+define(TURINA_NAMESPACE, 'jt-test');
 
 function fjm_turina_drush_command() {
   $command = array();
@@ -11,16 +11,16 @@ function fjm_turina_drush_command() {
     'example' => array(
       'drush -l <drupal site URL> fjm_turina_ingest',
     ),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+    //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
   );
   
   $command['fjm_turina_purge'] = array(
     'callback' => 'fjm_turina_purge',
     'description' => 'Purge the defined namespace.',
     'example' => array(
-      'drush [-l <drupal site URL>] fjm_turina_purge',
+      'drush [-l <drupal site URL>] fjm_turina_purge [fedora namespace]',
     ),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+    //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
   );
   
   $command['fjm_turina_reingest'] = array(
@@ -29,7 +29,16 @@ function fjm_turina_drush_command() {
     'example' => array(
       'drush [-l <drupal site URL>] fjm_turina_reingest',
     ),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+    //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+  );
+  
+  $command['fjm_turina_reindex'] = array(
+    'callback' => 'fjm_turina_reindex',
+    'description' => 'Reindex everything in the given namespace',
+    'example' => array(
+      'drush [-l <drupal site URL>] fjm_turina_reindex <namespace> [limit]',
+    ),
+    //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
   );
   
   return $command;
@@ -40,26 +49,67 @@ function fjm_turina_reingest() {
   fjm_turina_ingest();
 }
 
+function fjm_turina_reindex($namespace = TURINA_NAMESPACE) {
+  $fedora_url = variable_get('fedora_base_url', 'http://localhost:8080/fedora');
+  $parsed_fedora = $pf = parse_url($fedora_url);
+  $gsearch_url = "{$pf['scheme']}://{$pf['host']}:{$pf['port']}/fedoragsearch/rest";
+  
+  global $user;
+  $headers = array(
+    'Authorization' => "Basic " . base64_encode("{$user->name}:{$user->pass}"),
+  );
+  
+  foreach (_fjm_turina_select_namespace($namespace) as $result) {
+    $url = url($gsearch_url, array(
+      'query' => array(
+        'operation' => 'updateIndex',
+        'action' => 'fromPid',
+        'value' => $result['sub'],
+      ),
+    ));
+
+    $stat = drupal_http_request($url, $headers);
+    
+    if ($stat->code >= 200 && $stat->code < 300) {
+      //Success?
+      drush_log("Reindexed {$result['sub']}");
+      //drush_log($stat->data);
+    }
+    else {
+      //Fail...
+      drush_print_r($stat);
+      break;
+    }
+  }
+}
+
 function fjm_turina_purge($namespace = TURINA_NAMESPACE) {
+  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+  foreach (_fjm_turina_select_namespace($namespace) as $result) {
+    $item = new Fedora_Item($result['sub']);
+    $item->move_to_trash();
+    $item->modify_object($item->objectProfile->objLabel, 'D');
+    $item->purge('Nuked via Drush script');
+    $item->forget();
+    drush_log("Purged {$item->pid}.");
+  }
+}
+
+function _fjm_turina_select_namespace($namespace = TURINA_NAMESPACE, $limit = -1) {
   $namespace_query = <<<END_QUERY
 SELECT ?sub
 FROM <#ri>
 WHERE {
   ?sub <info:fedora/fedora-system:def/model#hasModel> ?obj .
-  FILTER(regex(str(?sub), '^info:fedora/$namespace:')) 
+  FILTER(regex(str(?sub), '^info:fedora/$namespace:'))
 }
 END_QUERY;
-  
-  module_load_include('inc', 'fedora_repository', 'ObjectHelper');
-  $results = ObjectHelper::performSparqlQuery($namespace_query);
-  
-  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
-  foreach ($results as $result) {
-    $item = new Fedora_Item($result['sub']);
-    $item->modify_object($item->objectProfile->objLabel, 'D');
-    $item->purge('Nuked via Drush script');
-    $item->forget();
-    drush_log("Purged {$item->pid}.");
+  if (strlen($namespace) > 1) {
+    module_load_include('inc', 'fedora_repository', 'ObjectHelper');
+    return ObjectHelper::performSparqlQuery($namespace_query, $limit);
+  }
+  else {
+    return array();
   }
 }
 
@@ -88,8 +138,8 @@ function fjm_turina_ingest() {
     $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
     
     $relations = array(
-      array('isMemberOfCollection', 'jt:test'),
-      array('hasModel', 'islandora:bookCModel'),
+      array('isMemberOfCollection', 'jt:bookCollection'),
+      array('hasModel', 'jt:bookCModel', 'info:fedora/fedora-system:def/model#'),
     );
     
     $new_objects = array();
@@ -124,7 +174,6 @@ function fjm_turina_ingest() {
  *   - 'M' otherwise.
  *   
  */
-
 function _fjm_turina_get_control_group_from_mime($mime) {
   $inline_xml_streams = array(
     'text/xml',
@@ -139,6 +188,7 @@ function _fjm_turina_get_control_group_from_mime($mime) {
     return 'M';
   }
 }
+
 
 /**
  * Ingest the given object,
@@ -178,9 +228,9 @@ function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
     $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
   }
   
-  $pid = $object['pid'];
+  $pid = NULL;
   $item = NULL;
-  if ($pid) {
+  if (isset($object['pid']) && ($pid = $object['pid'])) {
     $item = new Fedora_Item($pid);
   }
   else {
@@ -206,18 +256,19 @@ function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
   foreach ($object['datastreams'] as $dsid => &$dsinfo) {
     $label = $dsinfo['label'];
     $mimetype = $dsinfo['mimetype'];
-    $control_group = $dsinfo['control_group'];
-    if (!$control_group) {
+    $control_group = NULL;
+    //XXX: Yeah...  This is pretty bad structure...  Assigning in the condition...  Anyway. :P
+    if (!(isset($dsinfo['control_group']) && ($control_group = $dsinfo['control_group']))) {
       $control_group = $dsinfo['control_group'] = _fjm_turina_get_control_group_from_mime($mimetype);
     }
     
-    if ($dsinfo['fileurl']) {
+    if (isset($dsinfo['fileurl'])) {
       $item->add_datastream_from_url($dsinfo['fileurl'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
     }
-    elseif ($dsinfo['filepath']) {
+    elseif (isset($dsinfo['filepath'])) {
       $item->add_datastream_from_file($dsinfo['filepath'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
     }
-    elseif ($dsinfo['content']) {
+    elseif (isset($dsinfo['content'])) {
       $item->add_datastream_from_string($dsinfo['content'], $dsid, $label, $mimetype, $control_group, 'Added from Drush ingest script.');
     }
     else {
