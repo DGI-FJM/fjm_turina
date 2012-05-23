@@ -25,10 +25,10 @@ function fjm_turina_menu() {
  * Implementation of hook_theme
  */
 function fjm_turina_theme($existing, $type, $theme, $path) {
-
+  $templates_path = drupal_get_path('module', 'fjm_turina') . '/templates';
   return array(
     'fjm_turina_landing' => array(
-      'path' => drupal_get_path('module', 'fjm_turina') . '/templates',
+      'path' => $templates_path,
       'arguments' => array(
         'bio' => NULL,
         'content' => NULL,
@@ -44,8 +44,92 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
         'personal_archive' => NULL,
       ),
     ),
+    'fjm_turina_book_description' => array(
+      'arguments' => array(
+        'pid' => NULL,
+      ), 
+      'path' => $templates_path,
+      'template' => 'fjm-turina-book-desc',
+    ),
   );
 
+}
+
+function template_preprocess_fjm_turina_book_description(&$vars) {
+  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+  $pid = $vars['pid'];
+  $item = new Fedora_Item($pid);
+  if ($pid === NULL) {
+    //PID is null!?  What is there to theme...
+  }
+  elseif (!$item->exists()) {
+    //The item doesn't exists...  What to do?
+  }
+  
+  $mods_str = $item->get_datastream_dissemination('MODS');
+  $mods_doc = new DOMDocument();
+  $mods_doc->loadXML($mods_str);
+  
+  $mods_xpath = new DOMXPath($mods_doc);
+  $mods_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
+  
+  $vars['title'] = $mods_xpath->evaluate('string(/mods:mods/mods:titleInfo/mods:title/text())');
+  $vars['description'] = $mods_xpath->evaluate('string(/mods:mods/mods:abstract/text())');
+
+  $vars['desc_list'] = array(
+    array(
+      'label' => t('Genre'),
+      'value' => $mods_xpath->evaluate('string(/mods:mods/mods:genre/text())'),
+    ),
+    array(
+      'label' => t('Date'),
+      'value' => $mods_xpath->evaluate('string(/mods:mods/mods:originInfo/mods:dateCreated[not(@encoding)]/text())'),
+    ),
+    array(
+      'label' => t('Topic'),
+      'value' => $mods_xpath->evaluate('string(/mods:mods/mods:subject/mods:topic/text())'),
+    ), 
+    array(
+      'label' => t('Physical Description'),
+      'value' => $mods_xpath->evaluate('string(/mods:mods/mods:physicalDescription/mods:form[@authority="marcform"]/text())')
+    ),
+    array(
+      'label' => t('General Note'),
+      'value' => $mods_xpath->evaluate('string(/mods:mods/mods:note/text())'),
+    ),
+  );
+  
+  if (array_key_exists('PDF', $item->get_datastreams_list_as_array())) {
+    $vars['pdf_url'] = url("fedora/repository/object_download/$pid/PDF");
+  }
+  
+  global $base_url;
+  $viewer_path = drupal_get_path('module', 'islandora_bookviewer');
+  $vars['fullview_url'] = url("$base_url/$viewer_path/mainpage.php", array(
+    'query' => array(
+      'pid' => $pid,
+    ),
+    'fragment' => 'page/1/mode/1up',
+    'absolute' => TRUE,
+  ));
+  
+  module_load_include('inc', 'fedora_repository', 'ObjectHelper');
+  $images = ObjectHelper::performSparqlQuery(<<<END_QUERY
+PREFIX ip: <info:islandora/islandora-system:def/pageinfo#>
+SELECT ?page ?pageNumber
+FROM <#ri>
+WHERE {
+  ?page ip:isPageOf <info:fedora/$pid> ;
+        ip:isPageNumber ?pageNumber .
+}
+ORDER BY ?pageNumber
+LIMIT 1
+END_QUERY
+);
+  
+  if (count($images) > 0) {
+    $vars['image_url'] = url("fedora/repository/{$images[0]['page']}/WEB_JPG");
+  }
 }
 
 /**
@@ -59,4 +143,76 @@ function theme_fjm_turina_landing_collections($music, $personal_archive) {
   $output .= theme('links', $personal_archive, array('class' => 'fjm-turina-links-personal-archive'));
 
   return $output;  
+}
+
+function fjm_turina_fjm_turina_pre_ingest_alter(&$objects) {
+  module_load_include('inc', 'fjm_turina', 'ingest-help');
+  foreach ($objects as &$object) {
+    _fjm_turina_add_derivatives($object);
+  }
+}
+
+function fjm_turina_fjm_turina_post_ingest_alter(&$objects) {
+  module_load_include('inc', 'fjm_turina', 'ingest-help');
+  foreach ($objects as &$object) {
+    _fjm_turina_delete_derived_files($object);
+  }
+}
+
+function fjm_turina_islandora_bookviewer_get_page($pid) {
+  $url = url("fedora/repository/$pid/WEB_JPG", array('absolute' => TRUE));
+
+  return array(
+    'fjm_turina' => array(
+      '#url' => $url,
+      '#weight' => -5,
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_islandora_tabs().
+ */
+function fjm_turina_islandora_tabs($content_models, $pid, $page) {
+  module_load_include('inc', 'fedora_repository', 'ObjectHelper');
+  $cmodel_query = <<<END_QUERY
+PREFIX fm: <info:fedora/fedora-system:def/model#>
+SELECT ?model
+FROM <#ri>
+WHERE {
+  <info:fedora/$pid> fm:hasModel ?model .
+}
+END_QUERY;
+  
+  $cmodels = ObjectHelper::performSparqlQuery($cmodel_query);
+  
+  $tabset = array();
+  foreach ($cmodels as $cmodel) {
+    if ($cmodel['model'] == 'jt:bookCModel') {
+      $tabset['turina-book'] = array(
+        '#type' => 'tabpage',
+        '#title' => t('Content'),
+        '#tab_name' => 'turina-book',
+        '#content' => theme('fjm_turina_book_description', $pid),
+      );
+    }
+  }
+  return $tabset;
+}
+
+function fjm_turina_required_fedora_objects() {
+  return array(
+    'fjm_turina' => array(
+      'module' => 'fjm_turina',
+      'title' => t('FJM Turina Objects'),
+      'objects' => array(
+        array(
+          'pid' => 'jt:bookCollection',
+          'label' => 'Legado Joaquín Turina',
+          'cmodel' => 'islandora:collectionCModel',
+          'parent' => 'islandora:root',
+        ),
+      ),
+    ),
+  );
 }
