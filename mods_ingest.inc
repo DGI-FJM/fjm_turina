@@ -1,6 +1,7 @@
 <?php
 
 module_load_include('inc', 'fedora_repository', 'api/fedora_item'); //For the PAGE_URI constant
+module_load_include('inc', 'fjm_turina', 'ingest-help');
 
 /**
  *
@@ -59,34 +60,12 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   return $object;
 }
 
-function _fjm_turina_datastream_from_file($filename) {
-  $period_pos = strrpos($filename, '.');
-  $file_ext = substr($filename, $period_pos + 1);
-  $dsid = $base_dsid = strtoupper($file_ext);
-  $mimetype = mime_content_type($filename);
-  
-  if ($mimetype == 'image/jpeg') {
-    $dsid = 'FULL_JPG';
-  }
-  elseif ($mimetype == 'image/tiff') {
-    $dsid = 'TIFF';
-  }
-  
-  return array(
-    $dsid => array(
-      'label' => "$base_dsid datastream",
-      'mimetype' => $mimetype,
-      'filepath' => $filename,
-    ),
-  );
-}
-
 function _fjm_turina_get_child_from_file($file) {
   $filename = $file->filename;
 
   $period_pos = strrpos($filename, '.');
   $file_base = substr($filename, 0, $period_pos);
-  $page_number = substr($file_base, strrpos($file_base, '_') + 1);
+  $page_number = intval(substr($file_base, strrpos($file_base, '_') + 1));
 
   
   $object = array(
@@ -95,7 +74,7 @@ function _fjm_turina_get_child_from_file($file) {
       array('hasModel', 'islandora:pageCModel', 'info:fedora/fedora-system:def/model#'),
       array('isMemberOf', '%parent%'),
       array('isPageOf', '%parent%', ISLANDORA_PAGE_URI),
-      array('isPageNumber', $page_number, ISLANDORA_PAGE_URI),
+      array('isPageNumber', $page_number, ISLANDORA_PAGE_URI, RELS_TYPE_INT),
     ),
     'datastreams' => _fjm_turina_datastream_from_file($filename),
     'children' => array(),

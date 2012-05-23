@@ -1,7 +1,7 @@
 <?php
 
 module_load_include('inc', 'fedora_repository', 'api/fedora_item'); //For the PAGE_URI constant
-module_load_include('inc', 'fjm_turina', 'mods_ingest'); //The 'datastream from file" function can be reused...
+module_load_include('inc', 'fjm_turina', 'ingest-help');
 
 /**
  *
@@ -54,7 +54,7 @@ function _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $item, $r
       array('hasModel', 'islandora:pageCModel', 'info:fedora/fedora-system:def/model#'),
       array('isMemberOf', '%parent%'),
       array('isPageOf', '%parent%', ISLANDORA_PAGE_URI),
-      array('isPageNumber', $sub_item->getAttribute('ORDER'), ISLANDORA_PAGE_URI),
+      array('isPageNumber', $sub_item->getAttribute('ORDER'), ISLANDORA_PAGE_URI, RELS_TYPE_INT),
     );
     $object['children'][] = _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $sub_item, $page_relations);
   }
