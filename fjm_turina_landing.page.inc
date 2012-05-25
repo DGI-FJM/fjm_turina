@@ -28,9 +28,24 @@ function _fjm_turina_landing_page_collections() {
   return theme('fjm_turina_landing_collections', $music, $personal_archive );
 }
 
+function _fjm_turina_landing_page_render_links(array $links, $level = 0) {
+  $output = '<ul class="fjm-turina-links-browse link-level-' . $level . '">';
+  foreach ($links as $link) {
+    if (isset($link['link']['hidden']) && $link['link']['hidden'] == '0') {
+      $output .= '<li>' . theme('menu_item_link', $link['link']);
+      if (isset($link['below']) && !empty($link['below'])) {
+        $output .= _fjm_turina_landing_page_render_links($link['below'], $level + 1);
+      }
+      $output .= '</li>';
+    }
+  }
+  $output .= '</ul>';
+  return $output;
+}
+
 function _fjm_turina_landing_page_browse() {
-  $browse = menu_navigation_links('menu-browse');
-  return theme('links', $browse, array('class' => 'fjm-turina-links-browse'));
+  $browse = menu_tree_page_data('menu-browse');
+  return _fjm_turina_landing_page_render_links($browse);
 }
 
 function _fjm_turina_landing_page_search() {

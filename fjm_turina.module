@@ -25,6 +25,28 @@ function fjm_turina_menu() {
     'file' => 'fjm_turina_names.page.inc',
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['subjects'] = array(
+    'title' => 'Subjects',
+    'page callback' => 'fjm_turina_subjects',
+    'access arguments' => array('access content'),
+    'file' => 'fjm_turina_names.page.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['genres'] = array(
+    'title' => 'Genres',
+    'page callback' => 'fjm_turina_genres',
+    'access arguments' => array('access content'),
+    'file' => 'fjm_turina_names.page.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['titles'] = array(
+    'title' => 'Titles',
+    'page callback' => 'fjm_turina_titles',
+    'access arguments' => array('access content'),
+    'file' => 'fjm_turina_names.page.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  
   return $items;
 }
 
@@ -62,12 +84,13 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
       'arguments' => array(
         'queries' => array(),
         'map' => array(),
-        'selected' => 'A',
+        'selected' => 'ALL',
+        'path' => 'names',
       ),
       'path' => $templates_path,
       'template' => 'fjm-turina-name-letterer',
     ),
-    'turina_name_list' => array(
+    'turina_facet_list' => array(
       'arguments' => array(
         'names' => array(),
         'field' => 'mods_name_primary_personal_ms',
@@ -76,7 +99,6 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
       'template' => 'fjm-turina-name-list',
     ),
   );
-
 }
 
 function template_preprocess_fjm_turina_book_description(&$vars) {
