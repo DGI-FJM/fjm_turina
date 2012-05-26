@@ -6,7 +6,7 @@ function fjm_turina_drush_command() {
   $command = array();
   
   $command['fjm_turina_ingest'] = array(
-    'callback' => 'fjm_turina_ingest',
+    'callback' => 'drush_fjm_turina_ingest',
     'description' => 'Ingest objects.',
     'example' => array(
       'drush -l <drupal site URL> fjm_turina_ingest',
@@ -15,7 +15,7 @@ function fjm_turina_drush_command() {
   );
   
   $command['fjm_turina_purge'] = array(
-    'callback' => 'fjm_turina_purge',
+    'callback' => 'drush_fjm_turina_purge',
     'description' => 'Purge the defined namespace.',
     'example' => array(
       'drush [-l <drupal site URL>] fjm_turina_purge [fedora namespace]',
@@ -24,7 +24,7 @@ function fjm_turina_drush_command() {
   );
   
   $command['fjm_turina_reingest'] = array(
-    'callback' => 'fjm_turina_reingest',
+    'callback' => 'drush_fjm_turina_reingest',
     'description' => 'Convenience; purges and then ingests',
     'example' => array(
       'drush [-l <drupal site URL>] fjm_turina_reingest',
@@ -33,7 +33,7 @@ function fjm_turina_drush_command() {
   );
   
   $command['fjm_turina_reindex'] = array(
-    'callback' => 'fjm_turina_reindex',
+    'callback' => 'drush_fjm_turina_reindex',
     'description' => 'Reindex everything in the given namespace',
     'example' => array(
       'drush [-l <drupal site URL>] fjm_turina_reindex <namespace> [limit]',
@@ -44,12 +44,12 @@ function fjm_turina_drush_command() {
   return $command;
 }
 
-function fjm_turina_reingest() {
-  fjm_turina_purge();
-  fjm_turina_ingest();
+function drush_fjm_turina_reingest() {
+  drush_fjm_turina_purge();
+  drush_fjm_turina_ingest();
 }
 
-function fjm_turina_reindex($namespace = TURINA_NAMESPACE) {
+function drush_fjm_turina_reindex($namespace = TURINA_NAMESPACE) {
   $fedora_url = variable_get('fedora_base_url', 'http://localhost:8080/fedora');
   $parsed_fedora = $pf = parse_url($fedora_url);
   $gsearch_url = "{$pf['scheme']}://{$pf['host']}:{$pf['port']}/fedoragsearch/rest";
@@ -83,7 +83,7 @@ function fjm_turina_reindex($namespace = TURINA_NAMESPACE) {
   }
 }
 
-function fjm_turina_purge($namespace = TURINA_NAMESPACE) {
+function drush_fjm_turina_purge($namespace = TURINA_NAMESPACE) {
   module_load_include('inc', 'fedora_repository', 'api/fedora_item');
   foreach (_fjm_turina_select_namespace($namespace) as $result) {
     $item = new Fedora_Item($result['sub']);
@@ -126,7 +126,7 @@ function _fjm_turina_get_xml_files() {
 /**
  * Command callback; kick off the ingest process.
  */
-function fjm_turina_ingest() {
+function drush_fjm_turina_ingest() {
   module_load_include('inc', 'fjm_turina', 'mets_ingest');
   module_load_include('inc', 'fjm_turina', 'mods_ingest');
   
