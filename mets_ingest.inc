@@ -63,6 +63,7 @@ function _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $item, $r
 }
 
 function _fjm_turina_get_datastream_from_dmdsec($mets_xpath, $dmdid) {
+  static $count = 0; //XXX: Used to help avoid naming collisions (and the resulting looping)
   $datastreams = array();
 
   foreach ($mets_xpath->query("//mets:dmdSec[@ID='$dmdid']/mets:mdWrap") as $top_wrapper) {
@@ -76,8 +77,14 @@ function _fjm_turina_get_datastream_from_dmdsec($mets_xpath, $dmdid) {
       $bare_metadata_xml = new DOMDocument('1.0', 'utf-8');
       $metadata_element = $bare_metadata_xml->importNode($results->item(0), TRUE);
       $bare_metadata_xml->appendChild($metadata_element);
+      
+      $file_path = file_create_filename('ingest_mets_MODS_tmp_' . $count++ . '.xml', file_directory_path());
    
-      $datastream['content'] = $bare_metadata_xml->saveXML();
+      $bare_metadata_xml->save($file_path);
+      
+      $datastream['filepath'] = $file_path;
+      //XXX:  Bit of a hack...  Flag this "temp" file get deleted later... (via a hook in the module proper)
+      $datastream['fjm_turina_derived'] = TRUE;
       $datastreams[$dsid] = $datastream;
     }
     else {
@@ -104,7 +111,7 @@ function _fjm_turina_get_datastream_from_mets_file($mets_xpath, $mets_file, $fil
     $dsid = strtoupper($file_ext); //Just use the extension as the datastream id.
 
     $datastream['label'] = "Archival $dsid";
-    $mimetype = $datastream['mimetype'] = mime_content_type($file_path);
+    $mimetype = $datastream['mimetype'] = _fjm_turina_get_mimetype($file_path);
     
     if ($mimetype == 'image/jpeg') {
     $dsid = 'FULL_JPG';

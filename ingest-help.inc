@@ -79,7 +79,7 @@ function _fjm_turina_add_derivatives(&$object) {
 function _fjm_turina_delete_derived_files(&$object) {
   foreach ($object['datastreams'] as $dsid => $datastream) {
     if (isset($datastream['fjm_turina_derived']) && $datastream['fjm_turina_derived']) {
-      file_delete($datastream['filename']);
+      file_delete($datastream['filepath']);
     }
   }
 
@@ -92,7 +92,7 @@ function _fjm_turina_datastream_from_file($filename) {
   $period_pos = strrpos($filename, '.');
   $file_ext = substr($filename, $period_pos + 1);
   $dsid = $base_dsid = strtoupper($file_ext);
-  $mimetype = mime_content_type($filename);
+  $mimetype = _fjm_turina_get_mimetype($filename);
 
   if ($mimetype == 'image/jpeg') {
     $dsid = 'FULL_JPG';
@@ -108,4 +108,23 @@ function _fjm_turina_datastream_from_file($filename) {
       'filepath' => $filename,
     ),
   );
+}
+
+function _fjm_turina_get_mimetype($filename) {
+  $mt = NULL;
+  if (class_exists('finfo')) {
+    $mt = finfo::file($filename);
+  }
+  
+  if (!$mt && is_callable('mime_content_type')) {
+    $mt = mime_content_type($filename);
+  }
+  
+  if (!$mt) {
+    module_load_include('inc', 'fedora_repository', 'MimeClass');
+    $mc = new MimeClass();
+    $mt = $mc->get_mimetype($filename);
+  }
+  
+  return $mt;
 }

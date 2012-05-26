@@ -20,6 +20,7 @@ function _fjm_turina_get_objects_from_mods_file($filename, $mods_xpath, $relatio
 
 
 function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $relationships) {
+  static $count = 0;
   $object = array(
     'relationships' => $relationships,
     'datastreams' => array(),
@@ -33,12 +34,17 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   $bare_mods = new DOMDocument('1.0', 'utf-8');
   $mods_element = $bare_mods->importNode($item, TRUE);
   $bare_mods->appendChild($mods_element);
+  
+  $file_path = file_create_filename('ingest_MODS_tmp_' . $count++ . '.xml', file_directory_path());
+   
+  $bare_mods->save($file_path);
 
   //Add datastreams to the given object, based on inline XML.
   $object['datastreams']['MODS'] = array(
     'label' => 'MODS metadata record',
     'mimetype' => 'text/xml',
-    'content' => $bare_mods->saveXML(),
+    'filepath' => $file_path,
+    'fjm_turina_derived' => TRUE,
   );
 
   //Add datastream to the given object, base on files.
