@@ -198,18 +198,16 @@ function theme_fjm_turina_landing_collections($music, $personal_archive) {
   return $output;  
 }
 
-function fjm_turina_fjm_turina_pre_ingest_alter(&$objects) {
+function fjm_turina_fjm_turina_pre_ingest_alter(&$object) {
   module_load_include('inc', 'fjm_turina', 'ingest-help');
-  foreach ($objects as &$object) {
-    _fjm_turina_add_derivatives($object);
-  }
+
+  _fjm_turina_add_derivatives($object);
 }
 
-function fjm_turina_fjm_turina_post_ingest_alter(&$objects) {
+function fjm_turina_fjm_turina_post_ingest_alter(&$object) {
   module_load_include('inc', 'fjm_turina', 'ingest-help');
-  foreach ($objects as &$object) {
-    _fjm_turina_delete_derived_files($object);
-  }
+
+  _fjm_turina_delete_derived_files($object);
 }
 
 function fjm_turina_islandora_bookviewer_get_page($pid) {

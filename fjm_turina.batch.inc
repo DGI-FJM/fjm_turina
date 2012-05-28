@@ -1,14 +1,18 @@
 <?php
 
+define(TURINA_NAMESPACE, 'jt-test');
+module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+module_load_include('inc', 'fjm_turina', 'ingest-help');
+
 /**
  * Start a batch ingest.
  */
-function fjm_turina_batch_ingest() {
-  module_load_include('inc', 'fjm_turina', 'ingest-help');
-  
+function fjm_turina_batch_ingest($do_batch = TRUE) {
   $batch = array(
-    'file' => 'fjm_turina.batch.inc',
+    'title' => 'Turina batch ingest',
+    'file' => drupal_get_path('module', 'fjm_turina') . '/fjm_turina.batch.inc',
     'finished' => 'fjm_turina_finish_batch_ingest',
+    'operations' => array(),
   );
   
   $serial_prefix = 'serialized_book_';
@@ -16,11 +20,23 @@ function fjm_turina_batch_ingest() {
   
   $files = file_scan_directory($info_dir, "^$serial_prefix");
   while ($file = array_shift($files)) {
-    $batch['operations'][] = array('_fjm_turina_unserialize_and_ingest', $file->filename);
+    $batch['operations'][] = array('_fjm_turina_unserialize_and_ingest', array($file->filename));
   }
-  
-  batch_set($batch);
-  batch_process('fedora/repository');
+  $batch['operations'][] = array('_fjm_turina_delete_empty_dir', array($info_dir));
+
+  if ($do_batch) {
+    batch_set($batch);
+    batch_process('fedora/repository');
+  }
+  else {
+    $asdf = array();
+    
+    foreach ($batch['operations'] as $op) {
+      list($func, $args) = $op;
+      $args = array_merge($args, array(&$asdf));
+      call_user_func_array($func, $args);
+    }
+  }
 }
 
 function fjm_turina_finish_batch_ingest($success, $results, $operations) {
@@ -36,22 +52,36 @@ function fjm_turina_finish_batch_ingest($success, $results, $operations) {
   }
 }
 
+function _fjm_turina_delete_empty_dir($dir, &$context) {
+  $context['message'] = t('Cleaning up...');
+  $dir_contents = scandir($dir);
+  if (empty($dir_contents)) {
+    rmdir($dir);
+    $context['results'][] = t('Removed empty staging directory.');
+  }
+  else {
+    $context['results'][] = t('Staging directory %dir not empty!  Leaving as-is. Contents: @contents', array(
+      '%dir' => $dir,
+      '@contents' => print_r($dir_contents, TRUE),
+    ));
+  }
+}
+
 function _fjm_turina_unserialize_file($filename) {
   return unserialize(file_get_contents($filename));
 }
 
 function _fjm_turina_get_batch_pid(&$context) {
   static $namespace = TURINA_NAMESPACE; //Don't want/need to be able to change namespaces between calls.
-  
-  if (!isset($context['results']['remaining_allocated_pids'])) {
-    $context['results']['remaining_allocated_pids'] = array();
+  static $var = 'remaining_allocated_pids';
+  if (!isset($context['results'][$var])) {
+    $context['results'][$var] = array();
   }
   
-  $allocated_pids =& $context['results']['remaining_allocated_pids'];
+  $allocated_pids =& $context['results'][$var];
   
   if (empty($allocated_pids)) {
-    $pid_pool_size = 50;
-    module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+    $pid_pool_size = 4;
     $allocated_pids = Fedora_Item::get_next_PID_in_namespace($namespace, $pid_pool_size);
     $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
   }
@@ -59,7 +89,7 @@ function _fjm_turina_get_batch_pid(&$context) {
   return array_shift($allocated_pids);
 }
 
-function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &context) {
+function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &$context) {
   drupal_alter('fjm_turina_pre_ingest', $object, $parent_pid);
   
   $pid = NULL;
@@ -80,7 +110,7 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &context) {
       else {
         $context['results'][] = t('WARNING: %parent% placeholder used, but no parent PID for @object_label (skipping relationship "@relationship")', array(
           '@object_label' => $object['label'],
-          '@relationship' => print_r($relatioship, TRUE),
+          '@relationship' => print_r($relationship, TRUE),
         ));
         continue;
       }
@@ -115,12 +145,12 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &context) {
     }
   }
   
-  $context['results'][] t("Ingested @object_label with @pid.", array(
-    '@object_label' => $object_label,
+  $context['results'][] = t('Ingested object @object_label with @pid.', array(
+    '@object_label' => $object['label'],
     '@pid' => $pid,
   ));
   
-  drupal_alter('fjm_turina_post_ingest', $objects, $parent_pid);
+  drupal_alter('fjm_turina_post_ingest', $object, $parent_pid);
   
   foreach ($object['children'] as &$child) {
     _fjm_turina_batch_ingest_object($child, $pid, $context);
@@ -128,7 +158,15 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &context) {
 }
 
 function _fjm_turina_unserialize_and_ingest($filename, &$context) {
-  $object = _fjm_turina_unserialize($filename);
+  $object = _fjm_turina_unserialize_file($filename);
   file_delete($filename);
+  
+  $time = microtime(TRUE);
   _fjm_turina_batch_ingest_object($object, NULL, $context);
+  $delta = microtime(TRUE) - $time;
+  
+  $context['message'] = $context['results'][] = t('Ingested %label in @time seconds.', array(
+    '%label' => $object['label'],
+    '@time' => $delta,
+  ));
 }

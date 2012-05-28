@@ -45,16 +45,18 @@ function _fjm_turina_derive_image($filename, $dsid, $label = 'Derived image', $d
     );
   }
   else {
-    drush_print('Error producing derivative for: ', $filename);
+    watchdog('fjm_turina-ingest', 'Error producing derivative for %filename ', array(
+      '%filename' => $filename,), WATCHDOG_WARNING);
     return array();
   }
 }
+
 function _fjm_turina_add_derivatives(&$object) {
   //XXX: Was escaping accented characters...
   setlocale(LC_CTYPE, "en_US.UTF-8");
   
   $new_datastreams = array();
-  foreach ((array)$object['datastreams'] as $dsid => $datastream) {
+  foreach ($object['datastreams'] as $dsid => $datastream) {
     if ($dsid == 'FULL_JPG') {
       $new_datastreams += _fjm_turina_produce_jpeg_derivatives($datastream['filepath']);
     }
@@ -67,7 +69,6 @@ function _fjm_turina_add_derivatives(&$object) {
     $object['datastreams'] += $new_datastreams;
   }
   else {
-    dd($object);
     $object['datastreams'] = $new_datastreams;
   }
 }
@@ -105,14 +106,15 @@ function _fjm_turina_datastream_from_file($filename) {
 function _fjm_turina_get_mimetype($filename) {
   $mt = NULL;
   if (class_exists('finfo')) {
-    $mt = finfo::file($filename);
+    $finfo = new finfo();
+    $mt = $finfo->file($filename);
   }
   
-  if (!$mt && is_callable('mime_content_type')) {
+  if ((!$mt || $mt == 'application/octet-stream') && function_exists('mime_content_type')) {
     $mt = mime_content_type($filename);
   }
   
-  if (!$mt) {
+  if (!$mt || $mt == 'application/octet-stream') {
     module_load_include('inc', 'fedora_repository', 'MimeClass');
     $mc = new MimeClass();
     $mt = $mc->get_mimetype($filename);
@@ -157,8 +159,10 @@ function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_') {
     }
   
     //Serialize out to a file in $info_dir
-    $serial_file = file_create_filename($serial_prefix . $count++, $info_dir);
-    file_put_contents($serial_file, serialize($new_objects));
+    while ($object = array_shift($new_objects)) {
+      $serial_file = file_create_filename($serial_prefix . $count++, $info_dir);
+      file_put_contents($serial_file, serialize($object));
+    }
   }
   
   return $info_dir;
