@@ -55,7 +55,8 @@ function fjm_turina_finish_batch_ingest($success, $results, $operations) {
 function _fjm_turina_delete_empty_dir($dir, &$context) {
   $context['message'] = t('Cleaning up...');
   $dir_contents = scandir($dir);
-  if (empty($dir_contents)) {
+  if (empty($dir_contents) ||
+    (count($dir_contents) === 2 && in_array('.', $dir_contents) && in_array('..', $dir_contents))) {
     rmdir($dir);
     $context['results'][] = t('Removed empty staging directory.');
   }
