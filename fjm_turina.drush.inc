@@ -73,7 +73,6 @@ function drush_fjm_turina_reindex($namespace = TURINA_NAMESPACE) {
     if ($stat->code >= 200 && $stat->code < 300) {
       //Success?
       drush_log("Reindexed {$result['sub']}");
-      //drush_log($stat->data);
     }
     else {
       //Fail...
@@ -113,82 +112,50 @@ END_QUERY;
   }
 }
 
-/**
- * 
- * @return array
- */
-function _fjm_turina_get_xml_files() {
-  $files = file_directory_path() . '/data';
-  $xml_files = file_scan_directory($files, '\.[xX][mM][lL]');
-  return $xml_files;
-}
+
 
 /**
  * Command callback; kick off the ingest process.
  */
 function drush_fjm_turina_ingest() {
-  module_load_include('inc', 'fjm_turina', 'mets_ingest');
-  module_load_include('inc', 'fjm_turina', 'mods_ingest');
+  module_load_include('inc', 'fjm_turina', 'ingest-help');
   
-  $objects = array();
+  $info_dir = _fjm_turina_assemble_info();
   
-  foreach (_fjm_turina_get_xml_files() as $filename => $file) {
-    $xml_xpath = new DOMXPath(DOMDocument::load("./$filename"));
-    $xml_xpath->registerNamespace('mets', 'http://www.loc.gov/METS/');
-    $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
+  /*
+  foreach (file_scan_directory($info_dir, "^$serial_prefix") as $serial_file) {
+    $objects = unserialize(file_get_contents($serial_file->filename));
     
-    $relations = array(
-      array('isMemberOfCollection', 'jt:bookCollection'),
-      array('hasModel', 'jt:bookCModel', 'info:fedora/fedora-system:def/model#'),
-    );
-    
-    $new_objects = array();
-    $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, $relations));
-    
-    if (count($new_objects) === 0) {
-      $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mods_file($filename, $xml_xpath, $relations));
+    foreach ($objects as &$object) {
+      _fjm_turina_ingest_object_drush($object);
     }
     
-    $objects = array_merge($objects, $new_objects);
+    file_delete($serial_file->filename);
   }
-  
-  drupal_alter('fjm_turina_pre_ingest', $objects);
-  
-  foreach ($objects as &$object) {
-    _fjm_turina_ingest_object($object);
-  }
-  
-  drupal_alter('fjm_turina_post_ingest', $objects);
+  */
 }
+
+
+
+module_load_include('inc', 'fedora_repository', 'api/fedora_item');
 
 /**
- * Determines a control group, given a mimetype.
+ * Get an unused PID from Fedora.
  * 
- * @param $mime string
- *   A datastream's mimetype.
- * @return string
- *   - 'X' if $mime is one of:
- *     - 'text/xml'
- *     - 'application/xml'
- *     - 'application/rdf+xml'
- *   - 'M' otherwise.
- *   
+ * Allocates multiple, and returns one at a time.
  */
-function _fjm_turina_get_control_group_from_mime($mime) {
-  $inline_xml_streams = array(
-    'text/xml',
-    'application/xml',
-    'application/rdf+xml',
-  );
+function _fjm_turina_get_pid($allocation_size = 20) {
+  static $allocated_pids = array();
+  static $namespace = TURINA_NAMESPACE; //Don't want/need to be able to change namespaces between calls.
   
-  if (in_array($mime, $inline_xml_streams)) {
-    return 'X';
+  if (!$allocated_pids) {
+    $pid_pool_size = $allocation_size;
+    $allocated_pids = Fedora_Item::get_next_PID_in_namespace($namespace, $pid_pool_size);
+    $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
   }
-  else {
-    return 'M';
-  }
+  
+  return array_shift($allocated_pids);
 }
-
 
 /**
  * Ingest the given object,
@@ -218,15 +185,8 @@ function _fjm_turina_get_control_group_from_mime($mime) {
  *   A string containing the PID of the 'parent' object, used to fill in the
  *   '%parent%' placeholder in relationships.
  */
-function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
-  module_load_include('inc', 'fedora_repository', 'api/fedora_item');
-  static $allocated_pids = array();
-  
-  if (!$allocated_pids) {
-    $pid_pool_size = 4;
-    $allocated_pids = Fedora_Item::get_next_PID_in_namespace(TURINA_NAMESPACE, $pid_pool_size);
-    $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
-  }
+function _fjm_turina_ingest_object_drush(array &$object, $parent_pid = NULL) {
+  drupal_alter('fjm_turina_pre_ingest', $objects);
   
   $pid = NULL;
   $item = NULL;
@@ -234,7 +194,7 @@ function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
     $item = new Fedora_Item($pid);
   }
   else {
-    $pid = $object['pid'] = array_shift($allocated_pids);
+    $pid = $object['pid'] = _fjm_turina_get_pid();
     $item = Fedora_Item::ingest_new_item($pid, 'A', $object['label']);
   }
   
@@ -273,13 +233,14 @@ function _fjm_turina_ingest_object(array &$object, $parent_pid = NULL) {
     }
     else {
       drush_log("No content specified for datastream $dsid!", 'warning');
-      //drush_print_r($object);
     }
   }
   
   drush_log("Ingested $pid.");
   
   foreach ($object['children'] as &$child) {
-    _fjm_turina_ingest_object($child, $pid);
+    _fjm_turina_ingest_object_drush($child, $pid);
   }
+  
+  drupal_alter('fjm_turina_post_ingest', $objects);
 }

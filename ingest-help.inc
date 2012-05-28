@@ -40,12 +40,12 @@ function _fjm_turina_derive_image($filename, $dsid, $label = 'Derived image', $d
         'mimetype' => 'image/jpeg',
         'label' => $label,
         'filepath' => $jpeg_file,
-        'fjm_turina_derived_file' => TRUE,
+        'fjm_turina_derived' => TRUE,
       ),
     );
   }
   else {
-    drush_print('Error producing web derivative.');
+    drush_print('Error producing derivative for: ', $filename);
     return array();
   }
 }
@@ -67,12 +67,8 @@ function _fjm_turina_add_derivatives(&$object) {
     $object['datastreams'] += $new_datastreams;
   }
   else {
-    drush_print_r($object);
+    dd($object);
     $object['datastreams'] = $new_datastreams;
-  }
-
-  foreach ($object['children'] as &$child) {
-    _fjm_turina_add_derivatives($child);
   }
 }
 
@@ -81,10 +77,6 @@ function _fjm_turina_delete_derived_files(&$object) {
     if (isset($datastream['fjm_turina_derived']) && $datastream['fjm_turina_derived']) {
       file_delete($datastream['filepath']);
     }
-  }
-
-  foreach ($object['children'] as &$child) {
-    _fjm_turina_delete_derived_files($child);
   }
 }
 
@@ -127,4 +119,75 @@ function _fjm_turina_get_mimetype($filename) {
   }
   
   return $mt;
+}
+
+/**
+ *
+ * @return array
+ */
+function _fjm_turina_get_xml_files() {
+  $files = file_directory_path() . '/data';
+  $xml_files = file_scan_directory($files, '\.[xX][mM][lL]');
+  return $xml_files;
+}
+
+function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_') {
+  module_load_include('inc', 'fjm_turina', 'mets_ingest');
+  module_load_include('inc', 'fjm_turina', 'mods_ingest');
+  
+  $relations = array(
+    array('isMemberOfCollection', 'jt:bookCollection'),
+    array('hasModel', 'jt:bookCModel', 'info:fedora/fedora-system:def/model#'),
+  );
+
+  $info_dir = file_create_filename('ingest_dir', file_directory_path());
+  $count = 0;
+  mkdir($info_dir);
+  
+  foreach (_fjm_turina_get_xml_files() as $filename => $file) {
+    $xml_xpath = new DOMXPath(DOMDocument::load("./$filename"));
+    $xml_xpath->registerNamespace('mets', 'http://www.loc.gov/METS/');
+    $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
+  
+    $new_objects = array();
+    $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mets_file($filename, $xml_xpath, $relations));
+  
+    if (count($new_objects) === 0) {
+      $new_objects = array_merge($new_objects, _fjm_turina_get_objects_from_mods_file($filename, $xml_xpath, $relations));
+    }
+  
+    //Serialize out to a file in $info_dir
+    $serial_file = file_create_filename($serial_prefix . $count++, $info_dir);
+    file_put_contents($serial_file, serialize($new_objects));
+  }
+  
+  return $info_dir;
+}
+
+/**
+ * Determines a control group, given a mimetype.
+ *
+ * @param $mime string
+ *   A datastream's mimetype.
+ * @return string
+ *   - 'X' if $mime is one of:
+ *     - 'text/xml'
+ *     - 'application/xml'
+ *     - 'application/rdf+xml'
+ *   - 'M' otherwise.
+ *
+ */
+function _fjm_turina_get_control_group_from_mime($mime) {
+  $inline_xml_streams = array(
+    'text/xml',
+    'application/xml',
+    'application/rdf+xml',
+  );
+
+  if (in_array($mime, $inline_xml_streams)) {
+    return 'X';
+  }
+  else {
+    return 'M';
+  }
 }

@@ -50,6 +50,7 @@ function _fjm_turina_facet_page($name_field, $prefix, $page_class = 'turina-name
     'facet.field' => $name_field,
     'facet.sort' => 'index',
     'facet.mincount' => 1,
+    'facet.limit' => 10000, //XXX:  Seems like an arbitrary limit...  Anyway.  Looking at paging might be a good idea?
     'qt' => variable_get('islandora_solr_search_block_request_handler', 'standard'),
   );
   if ($prefix != t('ALL')) {

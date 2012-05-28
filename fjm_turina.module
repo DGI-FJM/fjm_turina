@@ -46,6 +46,13 @@ function fjm_turina_menu() {
     'file' => 'fjm_turina_names.page.inc',
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['turina_batch'] = array(
+    'title' => 'Batch ingest',
+    'page callback' => 'fjm_turina_batch_ingest',
+    'access arguments' => array('ingest new fedora objects'),
+    'file' => 'fjm_turina.batch.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
   
   return $items;
 }
