@@ -25,7 +25,7 @@ function _fjm_turina_get_objects_from_mets_div($mets_xpath, $filename, $item, $r
     'children' => array(),
   );
 
-  $object['label'] = $item->getAttribute('LABEL');
+  $object['label'] = truncate_utf8($item->getAttribute('LABEL'), 255, TRUE, TRUE);
 
   $dmdid = $item->getAttribute('DMDID');
   //Add datastreams to the given object, based on inline XML.

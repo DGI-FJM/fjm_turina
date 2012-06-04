@@ -133,7 +133,7 @@ function _fjm_turina_get_xml_files() {
   return $xml_files;
 }
 
-function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_') {
+function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_', $number = -1) {
   module_load_include('inc', 'fjm_turina', 'mets_ingest');
   module_load_include('inc', 'fjm_turina', 'mods_ingest');
   
@@ -147,6 +147,10 @@ function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_') {
   mkdir($info_dir);
   
   foreach (_fjm_turina_get_xml_files() as $filename => $file) {
+    if (($number > 0) && ($count >= $number)) {
+      break;
+    }
+    
     $xml_xpath = new DOMXPath(DOMDocument::load("./$filename"));
     $xml_xpath->registerNamespace('mets', 'http://www.loc.gov/METS/');
     $xml_xpath->registerNamespace('mods', 'http://www.loc.gov/mods/v3');
@@ -159,9 +163,9 @@ function _fjm_turina_assemble_info($serial_prefix = 'serialized_book_') {
     }
   
     //Serialize out to a file in $info_dir
-    while ($object = array_shift($new_objects)) {
+    while (($object = array_shift($new_objects)) && (($number < 0) || (($number > 0) && ($count < $number)))) {
       $serial_file = file_create_filename($serial_prefix . $count++, $info_dir);
-      file_put_contents($serial_file, serialize($object));
+      file_put_contents($serial_file, json_encode($object));
     }
   }
   

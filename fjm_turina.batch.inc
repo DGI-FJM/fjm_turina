@@ -7,7 +7,9 @@ module_load_include('inc', 'fjm_turina', 'ingest-help');
 /**
  * Start a batch ingest.
  */
-function fjm_turina_batch_ingest($do_batch = TRUE) {
+function fjm_turina_batch_ingest($operations_file = NULL) {
+  $do_batch = TRUE;
+  
   $batch = array(
     'title' => 'Turina batch ingest',
     'file' => drupal_get_path('module', 'fjm_turina') . '/fjm_turina.batch.inc',
@@ -15,14 +17,22 @@ function fjm_turina_batch_ingest($do_batch = TRUE) {
     'operations' => array(),
   );
   
-  $serial_prefix = 'serialized_book_';
-  $info_dir = _fjm_turina_assemble_info($serial_prefix);
-  
-  $files = file_scan_directory($info_dir, "^$serial_prefix");
-  while ($file = array_shift($files)) {
-    $batch['operations'][] = array('_fjm_turina_unserialize_and_ingest', array($file->filename));
+  if ($operations_file === NULL) {
+    $serial_prefix = 'serialized_book_';
+    $info_dir = _fjm_turina_assemble_info($serial_prefix);
+    
+    $files = file_scan_directory($info_dir, "^$serial_prefix");
+    while ($file = array_shift($files)) {
+      $batch['operations'][] = array('_fjm_turina_unserialize_and_ingest', array($file->filename));
+    }
+    $batch['operations'][] = array('_fjm_turina_delete_empty_dir', array($info_dir));
   }
-  $batch['operations'][] = array('_fjm_turina_delete_empty_dir', array($info_dir));
+  else {
+    $operations_file = file_directory_path() . '/' . $operations_file;
+    $batch['init_message'] = t('Continuing batch...');
+    $batch['operations'] = unserialize(file_get_contents($operations_file));
+  }
+  
 
   if ($do_batch) {
     batch_set($batch);
@@ -69,7 +79,7 @@ function _fjm_turina_delete_empty_dir($dir, &$context) {
 }
 
 function _fjm_turina_unserialize_file($filename) {
-  return unserialize(file_get_contents($filename));
+  return json_decode(file_get_contents($filename));
 }
 
 function _fjm_turina_get_batch_pid(&$context) {
@@ -82,7 +92,7 @@ function _fjm_turina_get_batch_pid(&$context) {
   $allocated_pids =& $context['results'][$var];
   
   if (empty($allocated_pids)) {
-    $pid_pool_size = 4;
+    $pid_pool_size = 50;
     $allocated_pids = Fedora_Item::get_next_PID_in_namespace($namespace, $pid_pool_size);
     $allocated_pids = (array)$allocated_pids; //Doesn't return as an array if there's only one...
   }
@@ -109,10 +119,10 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &$context) {
         $relationship[1] = $parent_pid;
       }
       else {
-        $context['results'][] = t('WARNING: %parent% placeholder used, but no parent PID for @object_label (skipping relationship "@relationship")', array(
+        watchdog('fjm_turina_batch', '%parent% placeholder used, but no parent PID for @object_label (skipping relationship "@relationship")', array(
           '@object_label' => $object['label'],
           '@relationship' => print_r($relationship, TRUE),
-        ));
+        ), WATCHDOG_WARNING);
         continue;
       }
     }
@@ -139,17 +149,19 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &$context) {
       $item->add_datastream_from_string($dsinfo['content'], $dsid, $label, $mimetype, $control_group, 'Added from Batch ingest script.');
     }
     else {
-      $context['results'][] = t('ERROR: No content specified for datastream @dsid in @pid!', array(
+      watchdog('fjm_turina_batch', 'No content specified for datastream @dsid in @pid (@object_label)!', array(
         '@pid' => $pid,
         '@dsid' => $dsid,
-      ));
+        '@object_label' => $object['label'],
+      ), WATCHDOG_WARNING);
+      continue;
     }
   }
   
-  $context['results'][] = t('Ingested object @object_label with @pid.', array(
+  watchdog('fjm_turina_batch', 'Ingested object @object_label with @pid.', array(
     '@object_label' => $object['label'],
     '@pid' => $pid,
-  ));
+  ), WATCHDOG_DEBUG);
   
   drupal_alter('fjm_turina_post_ingest', $object, $parent_pid);
   
@@ -159,15 +171,18 @@ function _fjm_turina_batch_ingest_object(&$object, $parent_pid, &$context) {
 }
 
 function _fjm_turina_unserialize_and_ingest($filename, &$context) {
-  $object = _fjm_turina_unserialize_file($filename);
-  file_delete($filename);
-  
-  $time = microtime(TRUE);
-  _fjm_turina_batch_ingest_object($object, NULL, $context);
-  $delta = microtime(TRUE) - $time;
-  
-  $context['message'] = $context['results'][] = t('Ingested %label in @time seconds.', array(
-    '%label' => $object['label'],
-    '@time' => $delta,
-  ));
+  if (is_readable($filename)) {
+    $object = _fjm_turina_unserialize_file($filename);
+    
+    $time = microtime(TRUE);
+    _fjm_turina_batch_ingest_object($object, NULL, $context);
+    $delta = microtime(TRUE) - $time;
+    
+    $context['message'] = $context['results'][] = t('Ingested book %label in @time seconds.', array(
+      '%label' => $object['label'],
+      '@time' => $delta,
+    ));
+    
+    file_delete($filename);
+  }
 }

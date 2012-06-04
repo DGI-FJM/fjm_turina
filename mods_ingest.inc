@@ -29,7 +29,7 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
 
   $title_info = $mods_xpath->query('mods:titleInfo', $item)->item(0);
   
-  $object['label'] = $mods_xpath->evaluate('string(mods:title/text())', $title_info);
+  $object['label'] = truncate_utf8($mods_xpath->evaluate('string(mods:title/text())', $title_info), 255, TRUE, TRUE);
   
   $bare_mods = new DOMDocument('1.0', 'utf-8');
   $mods_element = $bare_mods->importNode($item, TRUE);

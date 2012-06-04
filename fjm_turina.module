@@ -53,8 +53,19 @@ function fjm_turina_menu() {
     'file' => 'fjm_turina.batch.inc',
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['turina_batch_results'] = array(
+    'title' => 'Batch results',
+    'page callback' => 'fjm_turina_batch_result',
+    'access arguments' => array('ingest new fedora objects'),
+    'type' => MENU_NORMAL_ITEM,
+  );
   
   return $items;
+}
+
+function fjm_turina_batch_result($filename = 'ingest-results.dat') {
+  dsm(unserialize(file_get_contents(file_directory_path() . '/' . $filename)));
+  return TRUE;
 }
 
 /**
