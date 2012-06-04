@@ -41,6 +41,15 @@ function fjm_turina_drush_command() {
     //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
   );
   
+  $command['fjm_turina_assemble'] = array(
+    'callback' => 'drush_fjm_turina_assemble_info',
+    'description' => 'Assembles objects to be ingested.',
+    'example' => array(
+      'drush [-l <drupal site URL>] fjm_turina_assemble <namespace> [limit]',
+    ),
+    //'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_LOGIN,
+  );
+  
   return $command;
 }
 
@@ -112,7 +121,11 @@ END_QUERY;
   }
 }
 
-
+function drush_assemble_info() {
+  module_load_include('inc', 'fjm_turina', 'ingest-help');
+  
+  echo _fjm_turina_assemble_info();
+}
 
 /**
  * Command callback; kick off the ingest process.
@@ -122,7 +135,6 @@ function drush_fjm_turina_ingest() {
   
   $info_dir = _fjm_turina_assemble_info();
   
-  /*
   foreach (file_scan_directory($info_dir, "^$serial_prefix") as $serial_file) {
     $objects = unserialize(file_get_contents($serial_file->filename));
     
@@ -132,7 +144,6 @@ function drush_fjm_turina_ingest() {
     
     file_delete($serial_file->filename);
   }
-  */
 }
 
 
