@@ -43,10 +43,10 @@ function _fjm_turina_landing_page_collections() {
 
 function _fjm_turina_landing_page_browse() {
   if (module_exists('i18nmenu')) {
-    $browse = menu_navigation_links('menu-browse');
+    $browse = i18nmenu_menu_navigation_links('menu-browse');
   }
   else {
-    $browse = i18nmenu_menu_navigation_links('menu-browse');
+    $browse = menu_navigation_links('menu-browse');
   }
 
   return theme('links', $browse, array('class' => 'fjm-turina-links-browse'));
