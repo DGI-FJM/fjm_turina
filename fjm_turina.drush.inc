@@ -1,6 +1,6 @@
 <?php 
 
-define(TURINA_NAMESPACE, 'jt-test');
+define(TURINA_NAMESPACE, 'jt');
 
 function fjm_turina_drush_command() {
   $command = array();
@@ -108,7 +108,7 @@ function _fjm_turina_select_namespace($namespace = TURINA_NAMESPACE, $limit = -1
 SELECT ?sub
 FROM <#ri>
 WHERE {
-  ?sub <info:fedora/fedora-system:def/model#hasModel> ?obj .
+  ?sub <info:fedora/fedora-system:def/model#hasModel> <info:fedora/jt:bookCModel> .
   FILTER(regex(str(?sub), '^info:fedora/$namespace:'))
 }
 END_QUERY;
@@ -121,7 +121,7 @@ END_QUERY;
   }
 }
 
-function drush_assemble_info() {
+function drush_fjm_turina_assemble_info() {
   module_load_include('inc', 'fjm_turina', 'ingest-help');
   
   echo _fjm_turina_assemble_info();
@@ -158,7 +158,7 @@ module_load_include('inc', 'fedora_repository', 'api/fedora_item');
 function _fjm_turina_get_pid($allocation_size = 20) {
   static $allocated_pids = array();
   static $namespace = TURINA_NAMESPACE; //Don't want/need to be able to change namespaces between calls.
-  
+
   if (!$allocated_pids) {
     $pid_pool_size = $allocation_size;
     $allocated_pids = Fedora_Item::get_next_PID_in_namespace($namespace, $pid_pool_size);

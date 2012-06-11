@@ -43,6 +43,7 @@ function _fjm_turina_get_objects_from_mods_doc($mods_xpath, $filename, $item, $r
   $object['datastreams']['MODS'] = array(
     'label' => 'MODS metadata record',
     'mimetype' => 'text/xml',
+    'control_group' => 'X',
     'filepath' => $file_path,
     'fjm_turina_derived' => TRUE,
   );
