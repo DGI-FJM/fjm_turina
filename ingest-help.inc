@@ -99,6 +99,7 @@ function _fjm_turina_datastream_from_file($filename) {
       'label' => "$base_dsid datastream",
       'mimetype' => $mimetype,
       'filepath' => $filename,
+      'control_group' => _fjm_turina_get_control_group_from_mime($mimetype),
     ),
   );
 }

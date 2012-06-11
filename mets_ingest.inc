@@ -84,6 +84,7 @@ function _fjm_turina_get_datastream_from_dmdsec($mets_xpath, $dmdid) {
       
       $datastream['filepath'] = $file_path;
       //XXX:  Bit of a hack...  Flag this "temp" file get deleted later... (via a hook in the module proper)
+      $datastream['control_group'] = _fjm_turina_get_control_group_from_mime($datastream['mimetype']);
       $datastream['fjm_turina_derived'] = TRUE;
       $datastreams[$dsid] = $datastream;
     }
@@ -120,6 +121,7 @@ function _fjm_turina_get_datastream_from_mets_file($mets_xpath, $mets_file, $fil
       $dsid = 'TIFF';
     }
     
+    $datastream['control_group'] = _fjm_turina_get_control_group_from_mime($mimetype);
     $datastream['filepath'] = $file_path;
 
     $datastreams[$dsid] = $datastream;
