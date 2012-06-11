@@ -11,7 +11,7 @@
   <div class="front-wrapper-top">
     <div class="front-bio">
       <div class="bio-image"></div>
-      <p><?php print $bio; ?></p>
+        <?php print $bio; ?>
     </div>
     <div class="front-postcard"></div>
   </div>

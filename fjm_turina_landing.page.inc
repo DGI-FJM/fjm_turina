@@ -11,7 +11,8 @@ function fjm_turina_landing_page() {
 }
 
 function _fjm_turina_landing_page_bio() {
-  $output .= t('Bio placeholder - English');
+  $output = '<p>' . t('“For me, music is a “diary” of life itself” (1944)') . '</p>';
+  $output .= '<p>' . t('The Archive of the composer Joaquín Turina is a passionate journey through his life and his work, and a faithful portrait of the time of great changes that he lived through.') . '</p>';
   
   return $output;
 }
