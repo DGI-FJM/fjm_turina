@@ -79,6 +79,7 @@ function fjm_turina_theme($existing, $type, $theme, $path) {
       'arguments' => array(
         'bio' => NULL,
         'content' => NULL,
+        'more' => NULL,
         'collections' => NULL,
         'browse' => NULL,
         'search' => NULL,

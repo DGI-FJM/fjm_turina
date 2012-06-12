@@ -20,6 +20,8 @@
       <div class="front-content col-1">
         <h2 class="front-title"><?php print t('Content'); ?></h2>
         <?php print $content; ?>
+        <h3 class="front-title"><?php print t('More in the Foundation Juan March'); ?></h3>
+        <?php print $more; ?>
       </div>
       <div class="front-collections col-1">
         <h2 class="front-title"><?php print t('Collections'); ?></h2>
